@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Controle Comercial - P&G</title>
+<style>
+:root{--bg:#f4f6f8;--card:#fff;--text:#17212b;--muted:#667085;--primary:#0b63ce;--border:#e4e7ec;--good:#0b8f55;--warn:#b7791f}
+*{box-sizing:border-box} body{margin:0;font-family:Inter,Arial,sans-serif;background:var(--bg);color:var(--text)}
+header{background:linear-gradient(135deg,#0b63ce,#083b7a);color:#fff;padding:22px 28px}
+header h1{margin:0 0 5px;font-size:25px} header p{margin:0;opacity:.88}
+.wrap{max-width:1500px;margin:20px auto;padding:0 18px}
+.toolbar,.cards,.panel{background:var(--card);border:1px solid var(--border);border-radius:14px;box-shadow:0 3px 14px rgba(16,24,40,.05)}
+.toolbar{padding:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+button,select,input{font:inherit} button{border:0;border-radius:9px;padding:10px 14px;cursor:pointer;background:var(--primary);color:#fff;font-weight:600}
+button.secondary{background:#eef4fb;color:#124d88} button.danger{background:#c93636} button.gray{background:#667085}
+select,input[type=text],input[type=number]{border:1px solid #d0d5dd;border-radius:9px;padding:10px;background:#fff}
+.search{min-width:280px;flex:1}
+.cards{margin-top:16px;padding:15px;display:grid;grid-template-columns:repeat(5,1fr);gap:12px}
+.card{border:1px solid var(--border);border-radius:12px;padding:14px;background:#fbfcfd}
+.card small{display:block;color:var(--muted);margin-bottom:5px}.card strong{font-size:22px}
+.tabs{display:flex;gap:8px;margin:18px 0 12px}.tab{background:#e9eef5;color:#344054}.tab.active{background:var(--primary);color:#fff}
+.panel{padding:15px;overflow:hidden}
+.table-wrap{overflow:auto;max-height:65vh;border:1px solid var(--border);border-radius:10px}
+table{border-collapse:collapse;width:100%;min-width:1050px;background:#fff}
+th,td{padding:9px 10px;border-bottom:1px solid var(--border);white-space:nowrap;text-align:left;font-size:13px}
+th{position:sticky;top:0;background:#eef4fb;z-index:2;color:#344054}
+td.num{text-align:right}.status{font-weight:700}.good{color:var(--good)}.warn{color:var(--warn)}
+.actions{display:flex;gap:6px}.actions button{padding:6px 9px;font-size:12px}
+.footer{color:var(--muted);font-size:12px;margin:12px 0}
+.modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);align-items:center;justify-content:center;padding:20px;z-index:20}
+.modal.show{display:flex}.modal-box{background:#fff;border-radius:15px;max-width:900px;width:100%;max-height:90vh;overflow:auto;padding:20px}
+.formgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.field label{display:block;font-size:12px;color:var(--muted);margin-bottom:5px}.field input{width:100%}
+.modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
+@media(max-width:900px){.cards{grid-template-columns:repeat(2,1fr)}.formgrid{grid-template-columns:1fr 1fr}}
+@media(max-width:600px){.cards{grid-template-columns:1fr}.formgrid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Controle Comercial — P&G</h1>
+  <p>Gestão de clientes, faturamento, positivação, pontos e mecânicas por canal.</p>
+</header>
+<div class="wrap">
+  <div class="toolbar">
+    <select id="sheetSelect" onchange="changeSheet()"></select>
+    <input id="search" class="search" type="text" placeholder="🔎 Buscar por CNPJ ou nome..." oninput="render()">
+    <button onclick="openModal()">+ Novo cliente</button>
+    <button class="secondary" onclick="exportCSV()">Exportar CSV</button>
+    <button class="gray" onclick="resetData()">Restaurar planilha</button>
+    <button class="danger" onclick="clearAllData()">🧹 Limpar dados</button>
+  </div>
+
+  <div class="cards">
+    <div class="card"><small>Clientes</small><strong id="mClientes">0</strong></div>
+    <div class="card"><small>Faturamento</small><strong id="mValor">R$ 0</strong></div>
+    <div class="card"><small>Positivação</small><strong id="mPos">0</strong></div>
+    <div class="card"><small>FX2 + FX3</small><strong id="mFx">0</strong></div>
+    <div class="card"><small>Points</small><strong id="mPoints">0</strong></div>
+  </div>
+
+  <div class="tabs" id="tabs"></div>
+
+  <div class="panel">
+    <div class="table-wrap">
+      <table id="tbl"></table>
+    </div>
+    <div class="footer">Os dados editados ficam salvos neste navegador (localStorage). Use “Restaurar planilha” para voltar aos dados originais.</div>
+  </div>
+</div>
+
+<div class="modal" id="modal">
+  <div class="modal-box">
+    <h2 id="modalTitle">Novo cliente</h2>
+    <div class="formgrid" id="formgrid"></div>
+    <div class="modal-actions">
+      <button class="gray" onclick="closeModal()">Cancelar</button>
+      <button onclick="saveClient()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const ORIGINAL = {"ALIMENTAR": {"headers": ["2026-04-01 00:00:00", "", "FX2", "FX3", "VALOR", "POS", "f+m", "30p", "POINTS", "750ml+1l", "Serum", "PANTENE+", "CLICK"], "rows": [[1702922000103, "ADEMIR DOS SANTOS BIOCA ME", 1, "", 350, 1, "", "", "", "", "", "", ""], [39368505000149, "ANDRE L FERNANDES ", "", "", "", "", "", "", "", "", "", "", ""], [11900381000181, "CESAR DA SILVEIRA PEIRAO ME", "", "", 302, 1, "", "", "", "", 1, "", ""], [30926187000110, "CLAUDEMIR DA SILVA FIRMINO", "", 1, 1378, 1, "", "", "", 1, "", "", ""], [34155873000195, "CLEBER DA SILVA", "", 1, 2475, 1, "", "", "", "", 1, 1, ""], [4688853000119, "COMERCIO GENEROS ALIM. JANAINA LTDA EPP", "", 1, 949, 1, "", "", "", "", "", "", ""], [58303326000178, "CORBARI LTDA", "", 1, 1542, 1, "", "", "", 1, "", "", ""], [12596506000194, "DAMAS COMERCIO DE GENEROS ALIMENTICIOS LT", "", "", "", "", "", "", "", "", "", "", ""], [12188378000140, "ELIS REGINA PACHECO DA ROSA", "", "", 203, 1, "", "", "", "", "", "", ""], [31973676000195, "ELIZABETE HOLEK", 1, "", 361, 1, "", "", "", "", "", "", ""], [9417514000111, "GERSON MARCOS ALVES", "", "", "", "", "", "", "", "", "", "", 1], [86984937000164, "HENRIQUE DE ABREU PEREIRA", "", 1, 1432, 1, "", "", "", "", 1, "", ""], [16777596000170, "JAIR LAUDELINO DE AGUIAR", "", "", 249, 1, "", "", "", "", "", "", ""], [13193672000102, "JOCENI CLEMENTINO DA SILVA", "", "", "", "", "", "", "", "", "", "", ""], [4237447000130, "JOSE MENDES FILHO ME", "", 1, 1021, 1, "", "", "", "", "", "", ""], [55626432000102, "LIDIANE VILMA DE SOUZA", "", "", 315, 1, "", "", "", "", "", "", ""], [23474348000116, "LOURENA DE SOUZA ANDRE ", "", "", 317, 1, "", "", "", "", "", "", 1], [21577612000111, "LUCAS DE SOUZA RAIMUNDO", 1, "", 637, 1, "", "", "", "", "", "", ""], [345963000127, "MARGARETH ALVES RAMOS EPP", "", "", 222, 1, "", "", "", "", "", "", ""], [79274668000187, "MARIA BERNADETE JOSE MATOS ME", "", 1, 2055, 1, "", "", "", 1, "", "", ""], [7708992000155, "MARILIZE CARVALHOMARTINS ME", "", 1, 1380, 1, "", "", "", 1, "", "", ""], [14374544000128, "MAURO DA SILVA BENTO ME", "", "", "", "", "", "", "", "", "", "", ""], [12441209000170, "MERCADO ACORES LTDA", "", "", "", "", "", "", "", "", "", "", 1], [49033768000150, "MERCADO ANDRÉIA LTDA", "", 1, 2021, 1, "", "", "", "", "", "", ""], [38388409000108, "MERCADO CHRISPIM LTDA", "", "", "", "", "", "", "", "", "", "", ""], [183168000180, "MERCADO CIPRIANI LTDA", "", 1, 1609, 1, "", "", "", 1, "", "", ""], [24736434000112, "MERCADO DA ZEZA LTDA", "", 1, 2990, 1, "", "", "", "", "", 1, ""], [85344745000120, "MERCADO DONA ONDINA LTDA", "", "", "", "", "", "", "", "", "", "", ""], [52659416000110, "MERCADO DUNAS DO OUVIDOR LTDA", "", 1, 733, 1, "", "", "", 1, "", "", ""], [46450921000157, "MERCADO ENCANTADA LTDA", "", 1, 1665, 1, "", "", "", 1, 1, "", ""], [17821116000194, "MERCADO ERALDO LTDA", 1, "", 454, 1, "", "", "", "", "", "", ""], [1394452000168, "MERCADO ESPINDOLA LTDA", "", 1, 1252, 1, "", "", "", 1, "", "", ""], [8897022000108, "MERCADO FAMA LTDA", "", 1, 3628, 1, "", "", "", "", "", "", ""], [29062121000140, "MERCADO FERNANDES E SOUZA LTDA", "", "", "", "", "", "", "", "", "", "", ""], [77864643000108, "MERCADO TREVO ROSA LTDA ME", 1, "", 260, 1, "", "", "", 1, "", "", ""], [2693817000118, "MINIMERCADO ANA EIRELI EPP", "", "", "", "", "", "", "", "", "", "", ""], [32017875000273, "MINIMERCADO E CONVENIENCIA FELICIANO LTDA", 1, "", 616, 1, "", "", "", 1, "", "", ""], [32017875000192, "MINIMERCADO E CONVENIENCIA FELICIANO LTDA", "", 1, 816, 1, "", 1, "", "", "", "", ""], [23479351000122, "MINIMERCADO F.L LTDA", "", "", "", "", "", "", "", "", "", "", ""], [33213048000137, "MINIMERCADO MALU MONTEIRO LTDA", "", "", "", "", "", "", "", "", "", "", ""], [42868744000172, "MINIMERCADO NB SOUZA LTDA", "", 1, 934, 1, "", "", "", 1, "", "", ""], [39531735000187, "MINIMERCADO PRAIA DA BARRINHA LTDA", "", "", 249, 1, "", "", "", "", "", "", ""], [42830085000185, "MINIMERCADO RJ LTDA", "", 1, 500, 1, "", "", "", "", "", "", ""], [15459767000150, "MINIMERCADO SERGIO LTDA", "", "", 270, 1, "", "", "", "", "", "", ""], [21932544000161, "MINIMERCADO SULPRA EIRELI", "", 1, 4671, 1, "", "", "", "", "", 1, ""], [13494756000186, "MIRIAM ABREU ME", 1, "", 313, 1, "", "", "", "", "", "", ""], [83729590000115, "NATALIA TRAJANO DOS SANTOS", 1, "", 760, 1, "", "", "", "", "", "", ""], [82534827000140, "OSNILDA RODEIGUES DE BONA EPP", "", 1, 1199, 1, "", "", "", 1, "", "", ""], [83816124000339, "PAULINO NUNES LTDA", "", 1, 1273, 1, "", "", "", 1, "", "", ""], [83277574000139, "PEREIRA ERODRIGUES LTDA EPP", "", "", "", "", "", "", "", "", "", "", ""], [79229324000156, "PJ DE ABREU ME", "", 1, 700, 1, "", "", "", "", "", "", ""], [41543298000163, "REGINA PACHECO COELHO INDALENCIO", "", "", 222, 1, "", "", "", "", "", "", ""], [46354285000160, "SAIONARA MACHADO TORQUATO", 1, "", 760, 1, "", "", "", "", 1, "", ""], [53648180000189, "SOUZA COMERCIO DE ALIMENTO LTDA", 1, "", 407, 1, "", "", "", "", "", "", ""], [46398606000128, "STEFANE CRISTIANE MELLO COELHO COSTA LTDA", "", 1, 1339, 1, "", "", "", 1, 1, "", ""], [13335388000123, "SUPERBORTOLI LTDA ME", "", 1, 1201, 1, "", "", "", "", "", "", ""], [19623868000176, "SUPERMERCADO ALTO ARROIO LTDA EPP", "", 1, 4202, 1, "", "", "", 1, "", 1, ""], [10863657000217, "SUPERMERCADO BIFFAO LTDA", "", 1, 5459, 1, "", "", "", "", 1, 1, ""], [10863657000136, "SUPERMERCADO BIFFAO LTDA", "", 1, 28913, 1, "", "", 1, "", 1, 1, ""], [5820628000157, "SUPERMERCADO VALES COM DE ALIMENTOS LTDA", "", 1, 6000, 1, "", "", "", 1, 1, 1, ""], [17083772000137, "TANIA MARIA HOEPERS VICENTIN ME", "", "", "", "", "", "", "", "", "", "", 1], [95860334000303, "TIELI SUPERMERCADOS LTDA", "", "", "", "", "", "", "", "", "", "", ""], [95860334000494, "TIELI SUPERMERCADOS LTDA", "", "", "", "", "", "", "", "", "", "", ""], [95860334000575, "TIELI SUPERMERCADOS LTDA", "", "", "", "", "", "", "", "", "", "", ""], [95860334000656, "TIELI SUPERMERCADOS LTDA", "", "", "", "", "", "", "", "", "", "", ""], [3627402000109, "VALDA ELEUTERIO MERCEARIA", "", 1, 977, 1, "", "", "", "", "", "", ""], [15802326000100, "VANESSA CUSTODIA BERNARDO ME", "", "", "", "", "", "", "", "", "", "", ""], [10320867000188, "Z MARQUES E FILHA LTDA EPP", "", 1, 623, 1, "", "", "", "", "", "", ""]]}, "FARMA": {"headers": ["NOVEMBRO", "", "FX2", "FX3", "VALOR", "POS", "F+M", "30P", "POINTS", "SERUM", "8 secret", "PANTENE+", "Click"], "rows": [[58500573000164, "AGW FARMA LTDA", 1, "", 1855, 1, "", "", "", 1, "", "", ""], [5791997000169, "ANTONIO DA ROSA POLUCENO FILHO E CIA LTDA", "", 1, 2800, 1, "", 1, "", "", "", "", ""], [61317314000107, "ARCENO FARMA LTDA", "", "", 751, 1, "", "", "", "", "", "", ""], [63233970000157, "B DE SOUZA FARMACIA E DROGARIA LTDA", "", 1, 3806, 1, "", "", "", "", "", "", ""], [17051450000106, "CAMILA NICOLLE LOPES E CIA LTDA ME", "", 1, 1801, 1, "", 1, "", "", "", "", ""], [9255025000100, "CIDAFARMA FARMACIA LTDA ME", "", "", "", "", "", "", "", "", "", "", 1], [13571144000140, "DANIEL BORGES MARCELINO ME", "", "", 327, 1, "", "", "", "", "", "", ""], [2347978000150, "DROGARAIA PAES LEME LTDA ME", "", "", "", "", "", "", "", "", "", "", ""], [45542890000100, "DROGARIA BOGOWICZ GOULART LTDA", "", "", "", "", "", "", "", "", "", "", ""], [12099590000130, "DROGARIA E FARMACIA MACHADO E SILVA LTDA", "", "", 234, 1, "", "", "", "", "", "", ""], [80978091000173, "DROGARIA E FARMACIA MED SILVA LTDA ME", "", "", "", "", "", "", "", "", "", "", ""], [39605751000177, "DROGARIA E PERFUMARIA MOCOCA LTDA", "", "", 411, 1, "", "", "", "", "", "", ""], [9173525000101, "DROGARIA MACHADO SILVA DOIS LTDA", "", "", "", "", "", "", "", "", "", "", ""], [8080866000161, "FARMACIA CARVALHO LTDA ME", "", "", 655, 1, "", 1, "", "", "", "", ""], [2347951000167, "FARMACIA CELSO RAMOS LTDA", "", "", 325, 1, "", "", "", "", "", "", ""], [5617052000125, "FARMACIA E DROGARIA EDUARDO LTDA", "", "", "", "", "", "", "", "", "", "", ""], [75492132000187, "FARMACIA E DROGARIA IMARUI LTDA", "", "", "", "", "", "", "", "", "", "", ""], [23758412000190, "FARMACIA FARMALIZE LTDA", "", "", 248, 1, "", "", "", 1, "", "", ""], [3932265000116, "FARMACIA FERRUGEM LTDA ME", "", "", "", "", "", "", "", "", "", "", ""], [2613240000197, "FARMACIA GAROPABA LTDA", "", 1, 2742, 1, "", "", "", "", "", "", ""], [13592295000184, "FARMACIA IMBITUBA CENTRO LTDA ME", 1, "", 650, 1, "", "", "", "", "", "", ""], [85341386000158, "FARMACIA MADRE PAULINA LTDA", "", 1, 1093, 1, "", "", "", 1, "", "", ""], [1138493000193, "FARMACIA NEREU RAMOS LTDA", "", "", 216, 1, "", "", "", 1, "", "", ""], [81012627000164, "FARMACIA NOSSA SENHORA APARECIDA LTDA", "", 1, 735, 1, "", "", "", "", "", "", ""], [30108564000103, "FARMACIA VIEIRA E ROSA LTDA", "", 1, 2021, 1, "", "", "", "", "", "", ""], [2568537000188, "FRAGNANI E SILVA LTDA ME", "", "", 591, 1, "", "", "", "", "", "", ""], [112933000170, "JOAO BATISTA TACIANO E CIA LTDA ME", "", "", "", "", "", "", "", "", "", "", ""], [10217950000126, "JOAREZ DA SILVA E CIA LTDA ME", "", "", "", "", "", "", "", "", "", "", ""], [10243375000136, "JULIANA MANZONI VIELMO", "", "", 565, 1, "", 1, "", 1, "", "", ""], [45557260000109, "K R SIMON FARMACIA", 1, "", 1232, 1, "", "", "", 1, "", "", ""], [30314676000110, "LUCIANO LOPES FARMACIA ALVORADA", 1, "", 517, 1, "", "", "", "", "", "", ""], [4719388000136, "MARCIO GIULIANO MARCILIO ME", "", "", "", "", "", "", "", "", "", "", ""], [10488909000194, "MARCIO PAGLIOSA CAGOL", "", "", 200, 1, "", "", "", "", "", "", ""], [4675884000135, "OLIANA COMELI E CIA LTDA ME", 1, "", 637, 1, "", "", "", 1, "", "", ""], [80722820000126, "POUPFARMA FARMACIAS LTDA", "", "", 327, 1, "", "", "", "", "", "", ""], [756096000112, "POUPFARMA LIDER FARMACIAS LTDA", "", 1, 1833, 1, "", 1, "", "", "", "", ""], [26610009000108, "R DE SOUZA FARMACIA E DROGARIA", "", 1, 722, 1, "", "", "", 1, "", "", ""], [26610009000299, "R DE SOUZA FARMACIA E DROGARIA", "", "", "", "", "", "", "", "", "", "", ""], [48036238000101, "ROSE FARMA LTDA", "", "", "", "", "", "", "", "", "", "", ""], [7241347000175, "SUZANNE CRISTINA MARCILIO ME", "", 1, 1302, 1, "", 1, "", 1, "", "", ""], [55484191000104, "VIDA  NOVA COMERCIO DE PRODUTOS", "", "", 100, 1, "", "", "", "", "", "", ""]]}, "TRABALHADOR": {"headers": ["NOVEMBRO", "", "FX2", "FX3", "VALOR", "POS", "F+M", "30P", "POINTS", "SERUM", "7 secret", "PANTENE+", "Click"], "rows": [[19325969000160, "TRABALHADOR", 1, "", 424, 1, "", "", "", "", "", "", ""], [19325969000241, "TRABALHADOR", "", "", 427, 1, "", "", "", "", "", "", ""], [19325969000322, "TRABALHADOR", "", "", "", "", "", "", "", "", "", "", ""], [19325969000403, "TRABALHADOR", "", "", "", "", "", "", "", "", "", "", ""], [19325969000594, "TRABALHADOR", "", 1, 690, 1, "", "", "", "", "", "", ""], [19325969000756, "TRABALHADOR", "", 1, 5414, 1, "", 1, "", "", "", "", ""], [19325969000918, "TRABALHADOR", "", "", "", "", "", "", "", "", "", "", ""], [19325969001051, "TRABALHADOR", "", "", "", "", "", "", "", "", "", "", ""], [19325969001213, "TRABALHADOR", 1, "", 865, 1, "", 1, "", "", "", "", ""], [19325969001302, "TRABALHADOR", "", 1, 1080, 1, "", 1, "", "", "", "", ""], [19325969001485, "TRABALHADOR", "", "", 233, 1, "", 1, "", "", "", "", ""], [19325969001647, "TRABALHADOR", 1, "", 1063, 1, "", "", "", "", "", "", ""], [19325969001990, "TRABALHADOR", "", 1, 1403, 1, "", 1, "", "", "", "", ""], [19325969002023, "TRABALHADOR", "", 1, 3800, 1, "", "", "", "", "", "", ""], [19325969002295, "TRABALHADOR", "", "", 642, 1, "", "", "", "", "", "", ""], [19325969002376, "TRABALHADOR", "", "", "", "", "", "", "", "", "", "", ""], [19325969002880, "TRABALHADOR", "", "", "", "", "", "", "", "", "", "", ""], [19325969002961, "TRABALHADOR", "", "", "", "", "", "", "", "", "", "", ""], [19325969003186, "TRABALHADOR", "", "", "", "", "", "", "", "", "", "", ""], [19325969003267, "TRABALHADOR", "", "", "", "", "", "", "", "", "", "", ""], [19325969003429, "TRABALHADOR", "", "", "", "", "", "", "", "", "", "", ""], [19325969003690, "TRABALHADOR", "", "", "", "", "", "", "", "", "", "", ""], [19325969003771, "TRABALHADOR", "", "", "", "", "", "", "", "", "", "", ""], [19325969004158, "TRABALHADOR", "", "", "", "", "", "", "", "", "", "", ""], [19325969004239, "TRABALHADOR", "", "", "", "", "", "", "", "", "", "", ""], [19325969004310, "TRABALHADOR", "", "", "", "", "", "", "", "", "", "", ""], [19325969004743, "TRABALHADOR", "", "", "", "", "", "", "", "", "", "", ""], [19325969004824, "TRABALHADOR", "", "", "", "", "", "", "", "", "", "", ""], [19325969004905, "TRABALHADOR", "", 1, 5400, 1, "", "", "", "", "", "", ""], [19325969005120, "TRABALHADOR", "", 1, 1800, 1, "", 1, "", "", "", "", ""], [19325969005200, "TRABALHADOR", "", 1, 3900, 1, "", 1, "", "", "", "", ""], [19325969005634, "TRABALHADOR", "", 1, 4740, 1, "", "", "", "", "", "", ""], [19325969005715, "TRABALHADOR", "", 1, 2540, 1, "", "", "", "", "", "", ""], [19325969005804, "TRABALHADOR", "", 1, 1242, 1, "", 1, "", "", "", "", ""], [19325969006010, "TRABALHADOR", 1, "", 1867, 1, "", "", "", "", "", "", ""], [19325969006100, "TRABALHADOR", "", 1, 3816, 1, "", 1, "", "", "", "", ""], [19325969006282, "TRABALHADOR", "", 1, 1851, 1, "", 1, "", "", "", "", ""], [19325969006363, "TRABALHADOR", "", 1, 4000, 1, "", 1, "", "", "", "", ""], [19325969006444, "TRABALHADOR", "", 1, 1300, 1, "", "", "", "", "", "", ""], [19325969006525, "TRABALHADOR", "", 1, 3000, 1, "", "", "", "", "", "", ""], [19325969006606, "TRABALHADOR", 1, "", 1013, 1, "", 1, "", "", "", "", ""], [19325969006797, "TRABALHADOR", 1, "", 239, 1, "", 1, "", "", "", "", ""], [19325969006878, "TRABALHADOR", "", "", 200, 1, "", "", "", "", "", "", ""], [19325969006959, "TRABALHADOR", "", 1, 1121, 1, "", 1, "", "", "", "", ""], [19325969007092, "TRABALHADOR", "", "", "", "", "", "", "", "", "", "", ""]]}};
+const KEY = "controle_pg_junho_v1";
+let data = JSON.parse(localStorage.getItem(KEY) || "null") || structuredClone(ORIGINAL);
+let current = Object.keys(data)[0];
+let editIndex = null;
+
+const money = v => "R$ " + (Number(v)||0).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2});
+const num = v => Number(v)||0;
+
+function init(){
+  const sel=document.getElementById("sheetSelect");
+  sel.innerHTML=Object.keys(data).map(s=>`<option>${s}</option>`).join("");
+  sel.value=current;
+  renderTabs(); render();
+}
+function changeSheet(){current=document.getElementById("sheetSelect").value;renderTabs();render();}
+function renderTabs(){
+  document.getElementById("tabs").innerHTML=Object.keys(data).map(s=>`<button class="tab ${s===current?'active':''}" onclick="current='${s}';document.getElementById('sheetSelect').value='${s}';renderTabs();render()">${s}</button>`).join("");
+}
+function filteredRows(){
+  const q=document.getElementById("search").value.toLowerCase().trim();
+  const rows=data[current].rows;
+  if(!q) return rows.map((r,i)=>({r,i}));
+  return rows.map((r,i)=>({r,i})).filter(x=>String(x.r[0]).toLowerCase().includes(q)||String(x.r[1]).toLowerCase().includes(q));
+}
+function render(){
+  const obj=data[current], rows=filteredRows();
+  let h="<thead><tr>";
+  obj.headers.forEach(x=>h+=`<th>${x}</th>`);
+  h+="<th>Ações</th></tr></thead><tbody>";
+  rows.forEach(({r,i})=>{
+    h+="<tr>";
+    r.forEach((v,c)=>{
+      let cls=(c>=2&&c<=12)?"num":"";
+      h+=`<td class="${cls}">${v===""?"":(c===4?money(v):v)}</td>`;
+    });
+    h+=`<td><div class="actions"><button class="secondary" onclick="openModal(${i})">✏️ Editar cliente</button><button class="danger" onclick="clearClient(${i})">🧹 Limpar dados</button></div></td></tr>`;
+  });
+  h+="</tbody>";
+  document.getElementById("tbl").innerHTML=h;
+  updateMetrics();
+}
+function updateMetrics(){
+  const rows=data[current].rows;
+  let valor=0,pos=0,fx=0,points=0;
+  rows.forEach(r=>{valor+=num(r[4]);pos+=num(r[5]);fx+=num(r[2])+num(r[3]);points+=num(r[8]);});
+  document.getElementById("mClientes").textContent=rows.length;
+  document.getElementById("mValor").textContent=money(valor);
+  document.getElementById("mPos").textContent=pos.toLocaleString("pt-BR");
+  document.getElementById("mFx").textContent=fx.toLocaleString("pt-BR");
+  document.getElementById("mPoints").textContent=points.toLocaleString("pt-BR");
+}
+function openModal(index=null){
+  editIndex=index;
+  const obj=data[current], r=index===null?Array(obj.headers.length).fill(""):obj.rows[index];
+  document.getElementById("modalTitle").textContent=index===null?"Novo cliente":"Editar cliente";
+  const fg=document.getElementById("formgrid"); fg.innerHTML="";
+  obj.headers.forEach((head,i)=>{
+    if(i>12) return;
+    fg.innerHTML+=`<div class="field"><label>${head||"Campo "+(i+1)}</label><input id="f${i}" type="${i>=2?'number':'text'}" value="${String(r[i]??"").replace(/"/g,'&quot;')}"></div>`;
+  });
+  document.getElementById("modal").classList.add("show");
+}
+function closeModal(){document.getElementById("modal").classList.remove("show");}
+function saveClient(){
+  const obj=data[current], r=[];
+  for(let i=0;i<13;i++){let el=document.getElementById("f"+i); let v=el?el.value:""; if(i>=2 && v!=="") v=Number(v); r.push(v);}
+  if(!r[0] || !r[1]){alert("Informe CNPJ e nome.");return;}
+  if(editIndex===null)obj.rows.push(r); else obj.rows[editIndex]=r;
+  persist(); closeModal(); render();
+}
+function clearClient(i){
+  const nome = data[current].rows[i]?.[1] || "este cliente";
+  if(confirm("Tem certeza que deseja limpar TODOS os dados de " + nome + "?\n\nEsta ação apagará os dados preenchidos deste cliente.")){
+    data[current].rows[i] = Array(data[current].headers.length).fill("");
+    persist();
+    render();
+  }
+}
+function clearAllData(){
+  if(confirm("Tem certeza que deseja limpar TODOS os dados preenchidos?\n\nEsta ação apagará os dados de todas as abas e clientes. Os registros permanecerão vazios para novo preenchimento.")){
+    Object.values(data).forEach(obj=>{
+      obj.rows = obj.rows.map(() => Array(obj.headers.length).fill(""));
+    });
+    persist();
+    render();
+  }
+}
+function persist(){localStorage.setItem(KEY,JSON.stringify(data));}
+function resetData(){
+  if(confirm("Restaurar todos os dados originais da planilha? As alterações feitas no navegador serão perdidas.")){
+    data=structuredClone(ORIGINAL);persist();init();
+  }
+}
+function exportCSV(){
+  const obj=data[current];
+  const lines=[obj.headers.join(";")];
+  obj.rows.forEach(r=>lines.push(r.map(v=>String(v??"").replaceAll("; ",", ")).join(";")));
+  const blob=new Blob(["\uFEFF"+lines.join("\n")],{type:"text/csv;charset=utf-8"});
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=current.toLowerCase()+"_controle.csv";a.click();
+}
+init();
+</script>
+</body>
+</html>
